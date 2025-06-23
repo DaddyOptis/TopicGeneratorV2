@@ -3,108 +3,63 @@ import time
 import random
 import subprocess
 import sys
+import importlib.util
+from typing import List
 
 # ANSI escape codes for colored text
 COLORS = [
-    "\033[31m",  # Red
-    "\033[32m",  # Green
-    "\033[33m",  # Yellow
-    "\033[34m",  # Blue
-    "\033[35m",  # Magenta
-    "\033[36m",  # Cyan
-    "\033[91m",  # Bright Red
-    "\033[92m",  # Bright Green
-    "\033[93m",  # Bright Yellow
-    "\033[94m",  # Bright Blue
-    "\033[95m",  # Bright Magenta
-    "\033[96m",  # Bright Cyan
-    "\033[38;5;208m",  # Orange
-    "\033[38;5;226m",  # Bright Yellow 2
-    "\033[38;5;118m",  # Lime Green
-    "\033[38;5;21m",  # Teal
-    "\033[38;5;164m",  # Violet
-    "\033[38;5;196m",  # Pink
-    "\033[38;5;46m",  # Olive Green
-    "\033[38;5;51m",  # Sky Blue
-    "\033[38;5;202m",  # Gold
-    "\033[38;5;93m",  # Brown
-    "\033[38;5;160m",  # Purple
-    "\033[38;5;82m",  # Sea Green
-    "\033[38;5;178m",  # Light Purple
-    "\033[38;5;214m",  # Light Orange
-    "\033[38;5;155m",  # Light Pink
-    "\033[38;5;112m",  # Gray/Silver
-    "\033[38;5;230m",  # Light Yellow
-    "\033[38;5;120m",  # Light Green 2
-    "\033[38;5;50m",  # Light Blue 2
-    "\033[38;5;207m",  # Light Red
-    "\033[38;5;170m",  # Turquoise
-    "\033[38;5;135m",  # Coral
-    "\033[38;5;184m",  # Lavender
-    "\033[38;5;130m",  # Khaki
-    "\033[38;5;172m",  # Beige
-    "\033[38;5;220m",  # Light Brown
-    "\033[38;5;100m",  # Dark Green
-    "\033[38;5;25m",  # Dark Blue
-    "\033[38;5;88m",  # Dark Red
-    "\033[38;5;58m",  # Dark Magenta
-    "\033[38;5;59m",  # Dark Cyan
-    "\033[38;5;94m",  # Dark Yellow/Gold
-    "\033[38;5;107m",  # Dark Orange/Brown
-    "\033[38;5;163m",  # Dark Purple/Violet
-    "\033[38;5;203m",  # Dark Pink/Magenta
-    "\033[38;5;52m",  # Dark Teal/Cyan
+    "\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[35m", "\033[36m",
+    "\033[91m", "\033[92m", "\033[93m", "\033[94m", "\033[95m", "\033[96m",
+    "\033[38;5;208m", "\033[38;5;226m", "\033[38;5;118m", "\033[38;5;21m",
+    "\033[38;5;164m", "\033[38;5;196m", "\033[38;5;46m", "\033[38;5;51m",
+    "\033[38;5;202m", "\033[38;5;93m", "\033[38;5;160m", "\033[38;5;82m",
+    "\033[38;5;178m", "\033[38;5;214m", "\033[38;5;155m", "\033[38;5;112m",
+    "\033[38;5;230m", "\033[38;5;120m", "\033[38;5;50m", "\033[38;5;207m",
+    "\033[38;5;170m", "\033[38;5;135m", "\033[38;5;184m", "\033[38;5;130m",
+    "\033[38;5;172m", "\033[38;5;220m", "\033[38;5;100m", "\033[38;5;25m",
+    "\033[38;5;88m", "\033[38;5;58m", "\033[38;5;59m", "\033[38;5;94m",
+    "\033[38;5;107m", "\033[38;5;163m", "\033[38;5;203m", "\033[38;5;52m"
 ]
-RESET = "\033[0m"  # Reset to default color
+RESET = "\033[0m"
 
-def check_dependencies(dependencies):
-    """Checks and installs dependencies."""
-    missing_dependencies = []
-    for dependency in dependencies:
-        try:
-            __import__(dependency)
-        except ImportError:
-            missing_dependencies.append(dependency)
+def check_dependencies(dependencies: List[str]) -> None:
+    """Check and install missing Python dependencies."""
+    missing = [
+        dep for dep in dependencies
+        if not importlib.util.find_spec(dep)
+    ]
 
-    if missing_dependencies:
-        print(f"Missing dependencies: {', '.join(missing_dependencies)}")
+    if missing:
+        print(f"Missing dependencies: {', '.join(missing)}")
         try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing_dependencies])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
             print("Dependencies installed successfully.")
         except subprocess.CalledProcessError as e:
-            print(f"Error installing dependencies: {e}")
-            input("Press Enter to exit...")
-            sys.exit(1)
-        except Exception as e:
-            print(f"An unexpected error occurred during dependency installation: {e}")
-            input("Press Enter to exit...")
+            print(f"Installation failed: {e}")
             sys.exit(1)
     else:
         print("All dependencies are installed.")
 
-def get_wikipedia_topics(limit=20):
-    """Retrieves a list of random Wikipedia topics using the API."""
+def get_wikipedia_topics(limit: int = 20) -> List[str]:
+    """Fetch a list of random Wikipedia topics."""
+    url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&list=random&rnlimit={limit}&rnnamespace=0"
     try:
-        url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&list=random&rnlimit={limit}&rnnamespace=0"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        topics = [page['title'] for page in data['query']['random']]
-        return topics
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching Wikipedia topics: {e}")
+        return [page['title'] for page in data['query']['random']]
+    except requests.RequestException as e:
+        print(f"Error fetching topics: {e}")
         return []
 
-def print_topics_with_colors(topics):
-    """Prints topics with random colors."""
+def print_topics_with_colors(topics: List[str]) -> None:
+    """Print topics with colorful flair."""
     for topic in topics:
         color = random.choice(COLORS)
         print(f"{color}{topic}{RESET}")
 
 def main():
-    dependencies = ["requests"]
-    check_dependencies(dependencies)
-
+    check_dependencies(["requests"])
     try:
         while True:
             topics = get_wikipedia_topics()
@@ -112,10 +67,10 @@ def main():
                 print_topics_with_colors(topics)
             time.sleep(3)
     except KeyboardInterrupt:
-        print("\nProgram interrupted by user.")
+        print("\nExiting gracefully...")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        input("Press Enter to exit...")
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
