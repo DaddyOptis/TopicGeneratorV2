@@ -1,76 +1,98 @@
 import requests
 import time
 import random
+import threading
+import importlib.util
 import subprocess
 import sys
-import importlib.util
+from tkinter import Tk, Label, Frame, Text, Scrollbar, LEFT, RIGHT, BOTH, Y, END
 from typing import List
 
-# ANSI escape codes for colored text
 COLORS = [
-    "\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[35m", "\033[36m",
-    "\033[91m", "\033[92m", "\033[93m", "\033[94m", "\033[95m", "\033[96m",
-    "\033[38;5;208m", "\033[38;5;226m", "\033[38;5;118m", "\033[38;5;21m",
-    "\033[38;5;164m", "\033[38;5;196m", "\033[38;5;46m", "\033[38;5;51m",
-    "\033[38;5;202m", "\033[38;5;93m", "\033[38;5;160m", "\033[38;5;82m",
-    "\033[38;5;178m", "\033[38;5;214m", "\033[38;5;155m", "\033[38;5;112m",
-    "\033[38;5;230m", "\033[38;5;120m", "\033[38;5;50m", "\033[38;5;207m",
-    "\033[38;5;170m", "\033[38;5;135m", "\033[38;5;184m", "\033[38;5;130m",
-    "\033[38;5;172m", "\033[38;5;220m", "\033[38;5;100m", "\033[38;5;25m",
-    "\033[38;5;88m", "\033[38;5;58m", "\033[38;5;59m", "\033[38;5;94m",
-    "\033[38;5;107m", "\033[38;5;163m", "\033[38;5;203m", "\033[38;5;52m"
+    "red", "green", "blue", "purple", "orange", "cyan",
+    "magenta", "gold", "deep sky blue", "lime green",
+    "crimson", "dark orange", "orchid", "turquoise", "salmon"
 ]
-RESET = "\033[0m"
 
 def check_dependencies(dependencies: List[str]) -> None:
-    """Check and install missing Python dependencies."""
-    missing = [
-        dep for dep in dependencies
-        if not importlib.util.find_spec(dep)
-    ]
-
+    missing = [dep for dep in dependencies if not importlib.util.find_spec(dep)]
     if missing:
-        print(f"Missing dependencies: {', '.join(missing)}")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
-            print("Dependencies installed successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"Installation failed: {e}")
-            sys.exit(1)
-    else:
-        print("All dependencies are installed.")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
 
-def get_wikipedia_topics(limit: int = 20) -> List[str]:
-    """Fetch a list of random Wikipedia topics."""
+def get_wikipedia_topics(limit: int = 10) -> List[str]:
     url = f"https://en.wikipedia.org/w/api.php?action=query&format=json&list=random&rnlimit={limit}&rnnamespace=0"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        return [page['title'] for page in data['query']['random']]
+        return [item["title"] for item in data["query"]["random"]]
     except requests.RequestException as e:
-        print(f"Error fetching topics: {e}")
-        return []
+        return [f"Error: {e}"]
 
-def print_topics_with_colors(topics: List[str]) -> None:
-    """Print topics with colorful flair."""
+def update_content(topic_box: Text, log_box: Text) -> None:
+    topics = get_wikipedia_topics()
+    timestamp = time.strftime("%H:%M:%S")
+    log_text = f"[{timestamp}] Request sent — Received {len(topics)} topics\n"
+    log_box.insert(END, log_text)
+    log_box.see(END)
+
     for topic in topics:
         color = random.choice(COLORS)
-        print(f"{color}{topic}{RESET}")
+        topic_box.insert(END, f"{topic}\n", color)
+        topic_box.tag_config(color, foreground=color)
+    topic_box.see(END)
 
-def main():
-    check_dependencies(["requests"])
-    try:
+def refresh_loop(topic_box: Text, log_box: Text) -> None:
+    def loop():
         while True:
-            topics = get_wikipedia_topics()
-            if topics:
-                print_topics_with_colors(topics)
+            update_content(topic_box, log_box)
             time.sleep(3)
-    except KeyboardInterrupt:
-        print("\nExiting gracefully...")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        sys.exit(1)
+    threading.Thread(target=loop, daemon=True).start()
+
+def create_gui():
+    root = Tk()
+    root.title("Wikipedia Random Topics")
+    root.geometry("800x300")
+    root.configure(bg="black")
+
+    # Left panel (topics)
+    left_frame = Frame(root, width=400, bg="black")
+    left_frame.pack(side=LEFT, fill=BOTH, expand=True)
+
+    branding = Label(left_frame, text="Sponsored by Wikipedia", font=("Helvetica", 14, "bold"),
+                     fg="white", bg="black", anchor="w", justify=LEFT)
+    branding.pack(pady=(10, 0), anchor="w")
+
+    topic_container = Frame(left_frame, bg="black")
+    topic_container.pack(fill=BOTH, expand=True, padx=10, pady=5)
+
+    topic_box = Text(topic_container, bg="black", fg="white", font=("Helvetica", 11), wrap="word")
+    topic_box.pack(side=LEFT, fill=BOTH, expand=True)
+
+    topic_scroll = Scrollbar(topic_container, command=topic_box.yview)
+    topic_scroll.pack(side=RIGHT, fill=Y)
+    topic_box.config(yscrollcommand=topic_scroll.set)
+
+    # Right panel (logs)
+    right_frame = Frame(root, width=400, bg="black")
+    right_frame.pack(side=RIGHT, fill=BOTH, expand=True)
+
+    log_title = Label(right_frame, text="API Logs", font=("Helvetica", 12, "bold"), fg="white", bg="black")
+    log_title.pack(pady=(10, 0), anchor="w")
+
+    log_container = Frame(right_frame, bg="black")
+    log_container.pack(fill=BOTH, expand=True, padx=10, pady=5)
+
+    log_box = Text(log_container, bg="black", fg="lime", font=("Courier", 10), wrap="none", height=10)
+    log_box.pack(side=LEFT, fill=BOTH, expand=True)
+
+    log_scroll = Scrollbar(log_container, command=log_box.yview)
+    log_scroll.pack(side=RIGHT, fill=Y)
+    log_box.config(yscrollcommand=log_scroll.set)
+
+    refresh_loop(topic_box, log_box)
+    root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    check_dependencies(["requests"])
+    create_gui()
