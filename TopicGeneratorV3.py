@@ -52,7 +52,7 @@ def refresh_loop(topic_box: Text, log_box: Text) -> None:
 def create_gui():
     root = Tk()
     root.title("Wikipedia Random Topics")
-    root.geometry("800x700")
+    root.geometry("955x587")
     root.configure(bg="black")
 
     # Left panel (topics)
@@ -96,3 +96,4 @@ def create_gui():
 if __name__ == "__main__":
     check_dependencies(["requests"])
     create_gui()
+
